@@ -1,11 +1,22 @@
+//so from the database we receive a fen (of the starting position), and a list of the expected moves and variations
+
 var ruyLopez = 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R';
 
+var position = {
+  FEN: ruyLopez,
+  moves: [
+    "a6", 
+    "Ba4",
+    "b5"
+  ]
+}
+
 var board,
-  game = new Chess(),
-  statusEl = $('#status'),
-  fenEl = $('#fen'),
-  pgnEl = $('#pgn');
-  game.load(ruyLopez + ' b KQkq - 0 4')
+game = new Chess(),
+statusEl = $('#status'),
+fenEl = $('#fen'),
+pgnEl = $('#pgn');
+game.load(position.FEN + ' b KQkq - 0 4')
 
 // do not pick up pieces if the game is over
 // only pick up pieces for the side to move
@@ -28,6 +39,8 @@ var onDrop = function(source, target) {
   // illegal move
   if (move === null) return 'snapback';
 
+  checkAgainstMoves();
+
   updateStatus();
 };
 
@@ -36,6 +49,39 @@ var onDrop = function(source, target) {
 var onSnapEnd = function() {
   board.position(game.fen());
 };
+
+var checkAgainstMoves = function() {
+  var history = game.history();
+  var guess = history[history.length - 1];
+  var numberMoves = history.length - 1;
+  var correctMove = position.moves[numberMoves];
+
+  if (guess === correctMove) {
+    //either we show the new position and wait for the player to make another move, or if it's the end then we show feedback
+    handleCorrectMove(history, game, numberMoves, correctMove);
+  } else {
+    //show feedback
+    handleWrongMove();
+  }
+}
+
+var handleCorrectMove = function(history, game, numberMoves, correctMove) {
+  if (numberMoves === position.moves.length - 1) {
+    //show correct feedback, and load next position
+    console.log('end - all moves correct');
+  } else {
+    makeNextMove(history, game, numberMoves, correctMove)
+  }
+}
+
+var makeNextMove = function(history, game, numberMoves, correctMove) {
+  var nextMove = position.moves[numberMoves + 1];
+  game.move(nextMove);
+}
+
+var handleWrongMove = function() {
+  console.log('wrong!');
+}
 
 var updateStatus = function() {
   var status = '';
@@ -72,7 +118,7 @@ var updateStatus = function() {
 
 var cfg = {
   draggable: true,
-  position: ruyLopez,
+  position: position.FEN,
   orientation: 'black',
   onDragStart: onDragStart,
   onDrop: onDrop,
@@ -81,3 +127,4 @@ var cfg = {
 board = ChessBoard('board', cfg);
 
 updateStatus();
+
