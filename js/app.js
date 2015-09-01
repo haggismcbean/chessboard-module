@@ -1,130 +1,149 @@
-//so from the database we receive a fen (of the starting position), and a list of the expected moves and variations
-
-var ruyLopez = 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R';
-
+//TODO: Retrieve positions from the database
 var position = {
-  FEN: ruyLopez,
+  FEN: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 0 4',
   moves: [
     "a6", 
     "Ba4",
     "b5"
-  ]
+  ],
+  toMove: 'black'
 }
 
-var board,
-game = new Chess(),
-statusEl = $('#status'),
-fenEl = $('#fen'),
-pgnEl = $('#pgn');
-game.load(position.FEN + ' b KQkq - 0 4')
+Moves = function(moves) {
+  var self = this;
+  self.moves = moves;
 
-// do not pick up pieces if the game is over
-// only pick up pieces for the side to move
-var onDragStart = function(source, piece, position, orientation) {
-  if (game.game_over() === true ||
-      (game.turn() === 'w' && piece.search(/^b/) !== -1) ||
-      (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+  self.isCorrectMove = function(history) {
+    self.guess = history[history.length - 1];
+    self.numberMoves = history.length - 1;
+    self.correctMove = self.moves[self.numberMoves];
+
+    if (self.guess === self.correctMove) {
+      return true;
+    }
     return false;
   }
-};
 
-var onDrop = function(source, target) {
-  // see if the move is legal
-  var move = game.move({
-    from: source,
-    to: target,
-    promotion: 'q' // NOTE: always promote to a queen for example simplicity
-  });
-
-  // illegal move
-  if (move === null) return 'snapback';
-
-  checkAgainstMoves();
-
-  updateStatus();
-};
-
-// update the board position after the piece snap 
-// for castling, en passant, pawn promotion
-var onSnapEnd = function() {
-  board.position(game.fen());
-};
-
-var checkAgainstMoves = function() {
-  var history = game.history();
-  var guess = history[history.length - 1];
-  var numberMoves = history.length - 1;
-  var correctMove = position.moves[numberMoves];
-
-  if (guess === correctMove) {
-    //either we show the new position and wait for the player to make another move, or if it's the end then we show feedback
-    handleCorrectMove(history, game, numberMoves, correctMove);
-  } else {
-    //show feedback
-    handleWrongMove();
-  }
-}
-
-var handleCorrectMove = function(history, game, numberMoves, correctMove) {
-  if (numberMoves === position.moves.length - 1) {
-    //show correct feedback, and load next position
-    console.log('end - all moves correct');
-  } else {
-    makeNextMove(history, game, numberMoves, correctMove)
-  }
-}
-
-var makeNextMove = function(history, game, numberMoves, correctMove) {
-  var nextMove = position.moves[numberMoves + 1];
-  game.move(nextMove);
-}
-
-var handleWrongMove = function() {
-  console.log('wrong!');
-}
-
-var updateStatus = function() {
-  var status = '';
-
-  var moveColor = 'White';
-  if (game.turn() === 'b') {
-    moveColor = 'Black';
+  self.isAcceptedVariation = function() {
+    //TODO: THIS
+    return false;
   }
 
-  // checkmate?
-  if (game.in_checkmate() === true) {
-    status = 'Game over, ' + moveColor + ' is in checkmate.';
+  self.isRejectedVariation = function() {
+    //TODO: THIS
+    return false;
   }
 
-  // draw?
-  else if (game.in_draw() === true) {
-    status = 'Game over, drawn position';
-  }
-
-  // game still on
-  else {
-    status = moveColor + ' to move';
-
-    // check?
-    if (game.in_check() === true) {
-      status += ', ' + moveColor + ' is in check';
+  self.isEnd = function() {
+    if (self.numberMoves === self.moves.length - 1) {
+      return true;
+    } else {
+      return false;
     }
   }
 
-  statusEl.html(status);
-  fenEl.html(game.fen());
-  pgnEl.html(game.pgn());
-};
+  self.getNextMove = function() {
+    return self.moves[self.numberMoves + 1];
+  }
+}
 
-var cfg = {
-  draggable: true,
-  position: position.FEN,
-  orientation: 'black',
-  onDragStart: onDragStart,
-  onDrop: onDrop,
-  onSnapEnd: onSnapEnd
-};
-board = ChessBoard('board', cfg);
+Controller = function(position) {
+  var self = this;
+  self.FEN = position.FEN;
+  self.moves = new Moves(position.moves);
 
-updateStatus();
+  self.init = function() {
+    self.game = new Chess();
+    self.game.load(self.FEN);
+  }
+
+  self.handleDrag = function(source, piece, position, orientation) {
+    if (self.game.game_over() === true ||
+      (self.game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+      (self.game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+      return false;
+    }
+    return true
+  }
+
+  self.isLegal = function(source, target) {
+    var playersGuess = {
+      from: source,
+      to: target,
+      promotion: 'q' // TODO: offer and then handle underpromotion
+    }
+
+    var move = self.game.move(playersGuess);
+
+    if (move === null) {
+      return false;
+    }
+    return true;
+  }
+
+  self.handleDrop = function(source, target) {
+    if (!self.isLegal(source, target)){
+      return 'snapback';
+    }
+
+    var history = controller.game.history();
+
+    if (self.moves.isCorrectMove(history)) {
+      self.handleCorrectMove()
+    } else {
+      self.handleWrongMove();
+    }
+  }
+
+  self.handleCorrectMove = function(history, game, numberMoves, correctMove) {
+    if (self.moves.isEnd()) {
+      console.log('end - all moves correct');
+    } else {
+      self.makeNextMove();
+    }
+  }
+
+  self.makeNextMove = function() {
+    var nextMove = self.moves.getNextMove();
+    self.game.move(nextMove);
+  }
+
+  self.handleWrongMove = function() {
+    console.log('wrong!');
+  }
+
+  self.onSnapEnd = function() {
+    board.position(self.game.fen());
+  }
+
+  self.init();
+}
+
+BoardConfig = function(position, orientation) {
+  var self = this;
+
+  self.draggable = true;
+
+  self.position = position;
+
+  self.orientation = orientation;
+
+  self.onDragStart = function(source, piece, position, orientation) {
+    return controller.handleDrag(source, piece, position, orientation);
+  };
+
+  self.onDrop = function(source, target) {
+    controller.handleDrop(source, target);
+  };
+
+  self.onSnapEnd = function() {
+    controller.onSnapEnd();
+  }
+}
+
+var board;
+var controller = new Controller(position);
+var config = new BoardConfig(position.FEN, position.toMove);
+
+board = ChessBoard('board', config);
 
