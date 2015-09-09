@@ -1,14 +1,4 @@
 //TODO: Retrieve positions from the database
-var position = {
-  FEN: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 0 4',
-  moves: [
-    "a6", 
-    "Ba4",
-    "b5"
-  ],
-  toMove: 'black'
-}
-
 pgn = ['[Event "Casual Game"]',
        '[Site "Berlin GER"]',
        '[Date "1852.??.??"]',
@@ -29,99 +19,162 @@ pgn = ['[Event "Casual Game"]',
 
 var pgnString = pgn.join('\n');
 
-// Translator = function(pgn) {
-//   var self = this;
-//   self.pgn = pgn;
+MovesDisplay = function(moves) {
+  var self = this;
+  var moves = moves.moves;
 
-//   self.init = function() {
-//     self.sections = pgn.split("]");
-//     self.event = self.getInfo("Event");
-//     self.site = self.getInfo("Site");
-//     self.date = self.getInfo("Date");
-//     self.round = self.getInfo("Round");
-//     self.white = self.getInfo("White");
-//     self.black = self.getInfo("Black");
-//     self.result = self.getInfo("Result");
-//     self.FEN = self.getInfo("FEN");
+  self.init = function() {
+    $("body").append("<div class='moves-display'></div>");
+    self.$main = $(".moves-display");
+    populate();
+    self.hideMoves();
+  }
 
-//     self.moves = self.getMoves();
-//   }
+  self.showMoves = function() {
+    self.$main.show();
+  }
 
-//   self.getInfo = function(info) {
-//     for (var i=0; i < self.sections.length; i++) {
-//       if (self.sections[i].indexOf(info) > -1) {
-//         var subSections = self.sections[i].split('"');
-//         return subSections[1];
-//       }
-//     }
-//     return undefined;
-//   }
+  self.hideMoves = function() {
+    self.$main.hide();
+  }
 
-//   self.getMoves = function() {
-//     var last = self.sections.length - 1;
-//     console.log(JSON.stringify(self.sections[last], 0, 2));
-//   }
+  function populate() {
+    for (var i=0; i < moves.length; i++) {
+      self.$main.append("<div class='move' id='move-" + i + "'>" + moves[i].action + "</div>")
+      var $thisMove = $("#move-" + i);
+    }
+  }
 
-//   self.init();
-// }
+  self.init();
+}
 
-// var translator = new Translator(pgn);
+Feedback = function() {
+  var self = this;
 
+  self.init = function() {
+    $("body").append("<div class='feedback'></div>");
+    self.$feedback = $(".feedback");
+  }
 
-// Moves = function(moves) {
-//   var self = this;
-//   self.moves = moves;
+  self.showRight = function() {
+    self.$feedback.text("CORRECT");
+  }
 
-//   self.isCorrectMove = function(history) {
-//     self.guess = history[history.length - 1];
-//     self.numberMoves = history.length - 1;
-//     self.correctMove = self.moves[self.numberMoves];
+  self.showWrong = function() {
+    self.$feedback.text("WRONG");
+  }
 
-//     if (self.guess === self.correctMove) {
-//       return true;
-//     }
-//     return false;
-//   }
+  self.init();
+}
 
-//   self.isAcceptedVariation = function() {
-//     //TODO: THIS
-//     return false;
-//   }
+Moves = function(history, startingFen) {
+  var self = this;
+  self.moves = [];
+  self.history = history;
+  self.startingFen = startingFen;
 
-//   self.isRejectedVariation = function() {
-//     //TODO: THIS
-//     return false;
-//   }
+  self.init = function() {
+    populateMoves();
+  }
 
-//   self.isEnd = function() {
-//     if (self.numberMoves === self.moves.length - 1) {
-//       return true;
-//     } else {
-//       return false;
-//     }
-//   }
+  self.currentMove = function() {
+    for (var i=0; i < self.moves.length; i++) {
+      if (self.moves[i].toGuess) {
+        return self.moves[i];
+      }
+    }
+    return false;
+  }
 
-//   self.getNextMove = function() {
-//     return self.moves[self.numberMoves + 1];
-//   }
-// }
+  self.isCorrectMove = function(move) {
+    var currentMove = self.currentMove();
 
-Controller = function(pgn) {
+    if (move === currentMove.action) {
+      return true;
+    }
+
+    return false;
+  }
+
+  self.saveComputerMoveFen = function(fen) {
+    for (var i=0; i < self.moves.length; i++) {
+      if (self.moves[i].toGuess) {
+        self.moves[i-1].fen = fen;
+      }
+    }
+  }
+
+  self.computerReply = function(fen) {
+    for (var i=0; i < self.moves.length; i++) {
+      if (self.moves[i].toGuess == true) {
+        self.moves[i].toGuess = false;
+        self.moves[i].fen = fen;
+
+        if (self.moves[i+2]) {
+          self.moves[i+2].toGuess = true;
+        }
+
+        return self.moves[i+1].action;
+      }
+    }
+    return false;
+  }
+
+  self.isEnd = function() {
+    var currentMove = self.currentMove();
+    var index = self.moves.length - 1;
+
+    if (currentMove === self.moves[index]) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function populateMoves() {
+    for (var i=0; i < self.history.length; i++) {
+
+      var move = {
+        action: self.history[i],
+        toGuess: false,
+      }
+      self.moves.push(move);
+    }
+
+    self.moves[0].toGuess = true;
+  }
+
+  self.init();
+}
+
+Controller = function(pgn, startingPosition) {
   var self = this;
   self.pgn = pgn;
-  // self.moves = new Moves(position.moves);
-  // self.trainer = new Trainer(position.moves);
+  self.startingFen = startingPosition;
+  self.currentFen = startingPosition;
 
   self.init = function() {
     self.game = new Chess();
     self.game.load_pgn(self.pgn);
-    // self.game.load('r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 0 4')
 
-    self.fen = self.game.fen();
-    console.log(self.game.fen());
+    self.moves = new Moves(self.game.history(), self.currentFen);
 
-    var config = new BoardConfig(self.fen, 'black');
-    board = ChessBoard('board', config);
+    self.game.load(self.currentFen);
+
+    self.orientation = toMove();
+    
+    var config = new BoardConfig(self.currentFen, self.orientation);
+    self.board = ChessBoard('board', config);
+
+    self.movesDisplay = new MovesDisplay(self.moves);
+    self.feedback = new Feedback();
+  }
+
+  function toMove() {
+    if (self.game.turn() === 'b') {
+      return 'black';
+    }
+    return 'white';
   }
 
   self.handleDrag = function(source, piece, position, orientation) {
@@ -133,7 +186,23 @@ Controller = function(pgn) {
     return true
   }
 
-  self.isLegal = function(source, target) {
+  self.handleDrop = function(source, target) {
+    if (!self.makeMove(source, target)){
+      return 'snapback';
+    }
+
+    var history = controller.game.history();
+    var index = history.length - 1;
+    var currentMove = history[index];
+
+    if (self.moves.isCorrectMove(currentMove)) {
+      self.handleCorrectMove()
+    } else {
+      self.handleWrongMove();
+    }
+  }
+
+  self.makeMove = function(source, target) {
     var playersGuess = {
       from: source,
       to: target,
@@ -141,46 +210,37 @@ Controller = function(pgn) {
     }
 
     var move = self.game.move(playersGuess);
+    self.currentFen = self.game.fen();
 
     if (move === null) {
       return false;
     }
+
     return true;
-  }
-
-  self.handleDrop = function(source, target) {
-    if (!self.isLegal(source, target)){
-      return 'snapback';
-    }
-
-    var history = controller.game.history();
-
-    if (self.moves.isCorrectMove(history)) {
-      self.handleCorrectMove()
-    } else {
-      self.handleWrongMove();
-    }
   }
 
   self.handleCorrectMove = function(history, game, numberMoves, correctMove) {
     if (self.moves.isEnd()) {
-      console.log('end - all moves correct');
+      self.movesDisplay.showMoves();
+      self.feedback.showRight();
     } else {
       self.makeNextMove();
     }
   }
 
   self.makeNextMove = function() {
-    var nextMove = self.moves.getNextMove();
+    var nextMove = self.moves.computerReply(self.currentFen);
     self.game.move(nextMove);
+    self.moves.saveComputerMoveFen(self.game.fen());
   }
 
   self.handleWrongMove = function() {
-    console.log('wrong!');
+    self.movesDisplay.showMoves();
+    self.feedback.showWrong();
   }
 
   self.onSnapEnd = function() {
-    board.position(self.game.fen());
+    self.board.position(self.game.fen());
   }
 
   self.init();
@@ -208,7 +268,4 @@ BoardConfig = function(position, orientation) {
   }
 }
 
-var board;
-var controller = new Controller(pgnString);
-
-
+var controller = new Controller(pgnString, 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 0 4');
