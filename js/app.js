@@ -19,61 +19,132 @@ pgn = ['[Event "Casual Game"]',
 
 var pgnString = pgn.join('\n');
 
-MovesDisplay = function(moves) {
+TrainingPosition = function() {
   var self = this;
-  var moves = moves.moves;
 
   self.init = function() {
-    $("body").append("<div class='moves-display'></div>");
-    self.$main = $(".moves-display");
-    populate();
-    self.hideMoves();
+    self.game = new Chess();
+    self.moves = new Moves();
+    self.config = new BoardConfig();
   }
 
-  self.showMoves = function() {
-    self.$main.show();
+  self.newPosition = function(pgn) {
+    self.pgn = pgn;
+    self.isFinished = false;
+    self.startingFen = findStartingFen();
+    self.currentFen = self.startingFen;
+
+    self.game.load_pgn(self.pgn);
+
+    self.moves.newPosition(self.game.history(), self.currentFen);
+
+    self.game.load(self.currentFen);
+
+    self.orientation = toMove();
+    
+    self.config.newPosition(self.currentFen, self.orientation);
+    self.board = ChessBoard('board', self.config);
   }
 
-  self.hideMoves = function() {
-    self.$main.hide();
+  function findStartingFen() {
+    var sections = self.pgn.split("[");
+
+    for (var i=0; i < sections.length; i++) {
+      if (sections[i].indexOf("FEN") > -1) {
+        var end = sections[i].indexOf("]") - 4;
+        var start = sections[i].indexOf(" ") + 1;
+
+        var fen = sections[i].substr(start, 65);
+        return fen;
+      }
+    }
+    return false;
   }
 
-  function populate() {
-    for (var i=0; i < moves.length; i++) {
-      self.$main.append("<div class='move' id='move-" + i + "'>" + moves[i].action + "</div>")
-      var $thisMove = $("#move-" + i);
+  function toMove() {
+    if (self.game.turn() === 'b') {
+      return 'black';
+    }
+    return 'white';
+  }
+
+  self.handleDrag = function(source, piece, position, orientation) {
+    if (self.game.game_over() === true ||
+      (self.game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+      (self.game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+      return false;
+    }
+    return true
+  }
+
+  self.handleDrop = function(source, target) {
+    if (!self.makeMove(source, target)){
+      return 'snapback';
+    }
+
+    var history = controller.game.history();
+    var index = history.length - 1;
+    var currentMove = history[index];
+
+    if (self.moves.isCorrectMove(currentMove)) {
+      self.handleCorrectMove()
+    } else {
+      self.handleWrongMove();
     }
   }
 
+  self.makeMove = function(source, target) {
+    var playersGuess = {
+      from: source,
+      to: target,
+      promotion: 'q' // TODO: offer and then handle underpromotion
+    }
+
+    var move = self.game.move(playersGuess);
+    self.currentFen = self.game.fen();
+
+    if (move === null) {
+      return false;
+    }
+
+    return true;
+  }
+
+  self.handleCorrectMove = function(history, game, numberMoves, correctMove) {
+    if (self.moves.isEnd()) {
+      self.isFinished = true;
+    } else {
+      self.makeNextMove();
+    }
+  }
+
+  self.makeNextMove = function() {
+    var nextMove = self.moves.computerReply(self.currentFen);
+    self.game.move(nextMove);
+    self.moves.saveComputerMoveFen(self.game.fen());
+  }
+
+  self.handleWrongMove = function() {
+    self.isFinished = true;
+  }
+
+  self.onSnapEnd = function() {
+    self.board.position(self.game.fen());
+  }
+
   self.init();
 }
 
-Feedback = function() {
+Moves = function() {
   var self = this;
 
   self.init = function() {
-    $("body").append("<div class='feedback'></div>");
-    self.$feedback = $(".feedback");
   }
 
-  self.showRight = function() {
-    self.$feedback.text("CORRECT");
-  }
-
-  self.showWrong = function() {
-    self.$feedback.text("WRONG");
-  }
-
-  self.init();
-}
-
-Moves = function(history, startingFen) {
-  var self = this;
-  self.moves = [];
-  self.history = history;
-  self.startingFen = startingFen;
-
-  self.init = function() {
+  self.newPosition = function(history, startingFen) {
+    self.moves = [];
+    self.history = history;
+    self.startingFen = startingFen;
     populateMoves();
   }
 
@@ -147,113 +218,15 @@ Moves = function(history, startingFen) {
   self.init();
 }
 
-Controller = function(pgn, startingPosition) {
-  var self = this;
-  self.pgn = pgn;
-  self.startingFen = startingPosition;
-  self.currentFen = startingPosition;
-
-  self.init = function() {
-    self.game = new Chess();
-    self.game.load_pgn(self.pgn);
-
-    self.moves = new Moves(self.game.history(), self.currentFen);
-
-    self.game.load(self.currentFen);
-
-    self.orientation = toMove();
-    
-    var config = new BoardConfig(self.currentFen, self.orientation);
-    self.board = ChessBoard('board', config);
-
-    self.movesDisplay = new MovesDisplay(self.moves);
-    self.feedback = new Feedback();
-  }
-
-  function toMove() {
-    if (self.game.turn() === 'b') {
-      return 'black';
-    }
-    return 'white';
-  }
-
-  self.handleDrag = function(source, piece, position, orientation) {
-    if (self.game.game_over() === true ||
-      (self.game.turn() === 'w' && piece.search(/^b/) !== -1) ||
-      (self.game.turn() === 'b' && piece.search(/^w/) !== -1)) {
-      return false;
-    }
-    return true
-  }
-
-  self.handleDrop = function(source, target) {
-    if (!self.makeMove(source, target)){
-      return 'snapback';
-    }
-
-    var history = controller.game.history();
-    var index = history.length - 1;
-    var currentMove = history[index];
-
-    if (self.moves.isCorrectMove(currentMove)) {
-      self.handleCorrectMove()
-    } else {
-      self.handleWrongMove();
-    }
-  }
-
-  self.makeMove = function(source, target) {
-    var playersGuess = {
-      from: source,
-      to: target,
-      promotion: 'q' // TODO: offer and then handle underpromotion
-    }
-
-    var move = self.game.move(playersGuess);
-    self.currentFen = self.game.fen();
-
-    if (move === null) {
-      return false;
-    }
-
-    return true;
-  }
-
-  self.handleCorrectMove = function(history, game, numberMoves, correctMove) {
-    if (self.moves.isEnd()) {
-      self.movesDisplay.showMoves();
-      self.feedback.showRight();
-    } else {
-      self.makeNextMove();
-    }
-  }
-
-  self.makeNextMove = function() {
-    var nextMove = self.moves.computerReply(self.currentFen);
-    self.game.move(nextMove);
-    self.moves.saveComputerMoveFen(self.game.fen());
-  }
-
-  self.handleWrongMove = function() {
-    self.movesDisplay.showMoves();
-    self.feedback.showWrong();
-  }
-
-  self.onSnapEnd = function() {
-    self.board.position(self.game.fen());
-  }
-
-  self.init();
-}
-
-BoardConfig = function(position, orientation) {
+BoardConfig = function() {
   var self = this;
 
   self.draggable = true;
 
-  self.position = position;
-
-  self.orientation = orientation;
+  self.newPosition = function(position, orientation) {
+    self.position = position;
+    self.orientation = orientation;
+  }
 
   self.onDragStart = function(source, piece, position, orientation) {
     return controller.handleDrag(source, piece, position, orientation);
@@ -268,4 +241,5 @@ BoardConfig = function(position, orientation) {
   }
 }
 
-var controller = new Controller(pgnString, 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 0 4');
+var controller = new TrainingPosition();
+controller.newPosition(pgnString)
